@@ -201,23 +201,25 @@ void TIM2_PWM_Init(u32 arr,u32 psc)
 uint32_t dd[ESC_CMD_BUFFER_LEN]={0}; 
 
 
-u16 add_checksum_and_telemetry(u16 packet, u8 telem) {
-    u16 packet_telemetry = (packet << 1) | (telem & 1);
+u16 add_checksum_and_telemetry(u16 packet) {
+    u16 packet_telemetry = (packet << 1) | 0;
     u8 i;
-    u16 csum = 0;
-    u16 csum_data = packet_telemetry;
+    int csum = 0;
+    int csum_data = packet_telemetry;
 
     for (i = 0; i < 3; i++) {
         csum ^=  csum_data;   // xor data by nibbles
         csum_data >>= 4;
     }
     csum &= 0xf;
-    return (packet_telemetry << 4) | csum;    //append checksum
+		packet_telemetry = (packet_telemetry << 4) | csum;
+		
+    return packet_telemetry;    //append checksum
 }
 void pwmWriteDigital(uint32_t *esc_cmd, u16 value)
 {
     value = ( (value > 2047) ? 2047 : value );
-    value = add_checksum_and_telemetry(value, 0);
+    value = add_checksum_and_telemetry(value);
     esc_cmd[0]  = (value & 0x8000) ? ESC_BIT_1 : ESC_BIT_0;
     esc_cmd[1]  = (value & 0x4000) ? ESC_BIT_1 : ESC_BIT_0;
     esc_cmd[2]  = (value & 0x2000) ? ESC_BIT_1 : ESC_BIT_0;
@@ -238,15 +240,14 @@ void pwmWriteDigital(uint32_t *esc_cmd, u16 value)
 
 int main(void)
 { 
+	u16 moto_value =0;
+	u8 b = 1;
 	Clock_Config();
 	delay_init(168);                                   
 	TIM2_PWM_Init(70-1,4-1);   
-	pwmWriteDigital(dd, 1800);
+	//pwmWriteDigital(dd, 2000);
 	MYDMA_Config(DMA1_Stream5,DMA_Channel_3,(uint32_t)&(TIM2->CCR1),(uint32_t)dd,ESC_CMD_BUFFER_LEN);
-	delay_ms(1000);
-	delay_ms(1000);
-	delay_ms(1000);
-	delay_ms(1000);
+	delay_ms(1000);//解锁电调
 	delay_ms(1000);//解锁电调
 	while(1)
 	{         
@@ -265,6 +266,25 @@ int main(void)
 				break; 
 			}  
 		 }
-	delay_ms(10);
+		delay_ms(10);
+		pwmWriteDigital(dd, moto_value);
+		if(b == 1)
+		{
+			moto_value += 1;
+		}
+		else
+		{
+			moto_value -= 1;
+		}
+		
+		if(moto_value > 2047) 
+		{
+			b = 0;
+		}
+		if(moto_value == 0) 
+		{
+			b = 1;
+		}
+			
 	}
 }
